@@ -1,0 +1,77 @@
+seed: 3407
+device: cuda
+num_workers: 4
+amp: true
+
+data:
+  train_manifest: data/train_manifest.json
+  val_manifest: data/val_manifest.json
+  test_manifest: data/test_manifest.json
+  hr_crop_size: 256
+  scale_min: 1.5
+  scale_max: 6.0
+  use_s1: true
+  s2_channels: 3
+  s1_channels: 1
+  max_text_len: 16
+  pixelshuffle_supervision_prob: 0.2
+
+degradation:
+  kernel_size: 7
+  sigma_min: 0.6
+  sigma_max: 1.8
+  anisotropy_min: 1.0
+  anisotropy_max: 1.6
+  shot_noise_max: 0.02
+  read_noise_max: 0.01
+  compression_prob: 0.3
+  compression_quality_min: 85
+  compression_quality_max: 100
+  usm_amount: 0.2
+  usm_sigma: 1.0
+
+model:
+  channels: 64
+  rrdb_blocks: 36
+  growth_channels: 32
+  num_heads: 8
+  attn_dropout: 0.1
+  token_dropout: 0.1
+  max_text_len: 16
+  text_embed_dim: 768
+  adaln_eps: 1.0e-6
+  fourier_bands: 8
+  meta_kernel_size: 3
+  ff_expand: 2
+  rgb_out_channels: 3
+  pixelshuffle_scale: 4
+
+train:
+  batch_size: 4
+  total_steps: 200000
+  warmup_steps: 3000
+  lr: 2.0e-4
+  weight_decay: 0.0
+  betas: [0.9, 0.999]
+  grad_clip: 1.0
+  ema_decay: 0.999
+  log_every: 50
+  val_every: 2000
+  save_every: 5000
+  out_dir: runs/assr
+  lambda_consist: 0.2
+  lambda_lr: 1.0
+  lambda_pair: 0.2
+  use_perceptual: false
+  use_gan: false
+  lambda_perc_max: 0.005
+  lambda_adv_max: 0.0025
+  ramp_start: 120000
+  ramp_tau: 20000
+  pair_scale_samples: 1
+
+infer:
+  tile_size: 256
+  hr_overlap: 16
+  batch_size: 1
+  auto_mixed_precision: true
