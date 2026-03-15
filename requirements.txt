@@ -1,0 +1,18 @@
+# Core runtime
+numpy>=1.26
+Pillow>=10.0
+PyYAML>=6.0
+tqdm>=4.66
+
+# Deep learning
+torch>=2.2
+torchvision>=0.17
+
+# Metrics / vision utilities
+lpips>=0.1.4
+opencv-python-headless>=4.9
+scikit-image>=0.23
+
+# Offline caption generation
+transformers>=4.42
+accelerate>=0.33

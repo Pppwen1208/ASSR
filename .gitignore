@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+# Virtualenv
+.venv/
+venv/
+
+# Artifacts
+checkpoints/
+runs/
+logs/
+*.ckpt
+*.pth
+*.pt
+
+# Local protection
+.assr_unlock.json
+
+# OS
+Thumbs.db
+.DS_Store
+
