@@ -17,6 +17,7 @@ logs/
 *.ckpt
 *.pth
 *.pt
+!weights/assr.pth
 
 # Local protection
 .assr_unlock.json
@@ -24,4 +25,3 @@ logs/
 # OS
 Thumbs.db
 .DS_Store
-
