@@ -5,8 +5,8 @@ PyYAML>=6.0
 tqdm>=4.66
 
 # Deep learning
-torch>=2.2
-torchvision>=0.17
+torch==2.1.2
+torchvision==0.16.2
 
 # Metrics / vision utilities
 lpips>=0.1.4
@@ -14,5 +14,5 @@ opencv-python-headless>=4.9
 scikit-image>=0.23
 
 # Offline caption generation
-transformers>=4.42
+transformers==4.37.2
 accelerate>=0.33

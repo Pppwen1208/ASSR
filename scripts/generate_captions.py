@@ -9,6 +9,15 @@ from typing import Any
 import torch
 from PIL import Image
 
+CAPTION_MODEL_ID = "Salesforce/blip-image-captioning-base"
+CAPTION_PROMPT = "Describe this image in one short sentence."
+CAPTION_DO_SAMPLE = False
+CAPTION_NUM_BEAMS = 3
+CAPTION_MAX_NEW_TOKENS = 16
+CAPTION_MAX_TOKENS = 16
+CAPTION_IMAGE_SIZE = 384
+CAPTION_FALLBACK = "a low-resolution satellite image"
+
 
 def _load_json(path: str | Path) -> Any:
     with Path(path).open("r", encoding="utf-8") as f:
@@ -23,7 +32,8 @@ def _save_json(path: str | Path, data: Any) -> None:
 
 
 def _normalize_caption(text: str) -> str:
-    return " ".join((text or "").strip().split())
+    # Table A2: lowercase + whitespace stripping.
+    return " ".join((text or "").strip().lower().split())
 
 
 def _extract_text_from_pipeline_output(obj: Any) -> str:
@@ -38,6 +48,36 @@ def _extract_text_from_pipeline_output(obj: Any) -> str:
     if isinstance(obj, dict):
         return str(obj.get("generated_text", ""))
     return str(obj)
+
+
+def _resize_for_caption(image: Image.Image) -> Image.Image:
+    image = image.convert("RGB")
+    if hasattr(Image, "Resampling"):
+        return image.resize((CAPTION_IMAGE_SIZE, CAPTION_IMAGE_SIZE), Image.Resampling.BICUBIC)
+    return image.resize((CAPTION_IMAGE_SIZE, CAPTION_IMAGE_SIZE), Image.BICUBIC)
+
+
+def _run_caption_inference(caption_pipe: Any, images: list[Image.Image]) -> list[str]:
+    kwargs = {
+        "max_new_tokens": CAPTION_MAX_NEW_TOKENS,
+        "do_sample": CAPTION_DO_SAMPLE,
+        "num_beams": CAPTION_NUM_BEAMS,
+    }
+    try:
+        pred = caption_pipe(images, prompt=CAPTION_PROMPT, **kwargs)
+    except TypeError:
+        pred = caption_pipe(images, **kwargs)
+
+    if len(images) == 1:
+        pred = [pred]
+
+    captions: list[str] = []
+    for one_out in pred:
+        caption = _normalize_caption(_extract_text_from_pipeline_output(one_out))
+        if not caption:
+            caption = CAPTION_FALLBACK
+        captions.append(caption)
+    return captions
 
 
 def _resolve_image_path(
@@ -57,8 +97,6 @@ def _resolve_image_path(
 
 
 def _load_caption_model(
-    model_id: str,
-    tokenizer_id: str | None,
     local_files_only: bool,
     device: str,
 ) -> tuple[Any, Any]:
@@ -78,20 +116,20 @@ def _load_caption_model(
 
     cap_pipe = pipeline(
         task="image-to-text",
-        model=model_id,
+        model=CAPTION_MODEL_ID,
         device=pipe_device,
         torch_dtype=dtype,
         local_files_only=local_files_only,
     )
     tok = AutoTokenizer.from_pretrained(
-        tokenizer_id or model_id,
+        CAPTION_MODEL_ID,
         use_fast=True,
         local_files_only=local_files_only,
     )
     return cap_pipe, tok
 
 
-def _truncate_to_token_ids(tokenizer: Any, text: str, max_tokens: int) -> list[int]:
+def _truncate_to_token_ids(tokenizer: Any, text: str, max_tokens: int = CAPTION_MAX_TOKENS) -> list[int]:
     return tokenizer.encode(
         text,
         add_special_tokens=False,
@@ -121,15 +159,10 @@ def _run_manifest_mode(
         index_and_paths.append((i, img_path))
 
     for chunk in _batch_chunks(index_and_paths, args.batch_size):
-        imgs = [Image.open(p).convert("RGB") for _, p in chunk]
-        pred = caption_pipe(imgs, max_new_tokens=args.max_new_tokens)
-        if len(chunk) == 1:
-            pred = [pred]
-        for (idx, _), one_out in zip(chunk, pred):
-            caption = _normalize_caption(_extract_text_from_pipeline_output(one_out))
-            token_ids = _truncate_to_token_ids(
-                tokenizer, caption, max_tokens=args.max_tokens
-            )
+        imgs = [_resize_for_caption(Image.open(p)) for _, p in chunk]
+        captions = _run_caption_inference(caption_pipe, imgs)
+        for (idx, _), caption in zip(chunk, captions):
+            token_ids = _truncate_to_token_ids(tokenizer, caption)
             outputs[idx][args.caption_key] = caption
             outputs[idx][args.token_key] = token_ids
     return outputs
@@ -143,15 +176,10 @@ def _run_glob_mode(
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for chunk in _batch_chunks(paths, args.batch_size):
-        imgs = [Image.open(p).convert("RGB") for p in chunk]
-        pred = caption_pipe(imgs, max_new_tokens=args.max_new_tokens)
-        if len(chunk) == 1:
-            pred = [pred]
-        for path, one_out in zip(chunk, pred):
-            caption = _normalize_caption(_extract_text_from_pipeline_output(one_out))
-            token_ids = _truncate_to_token_ids(
-                tokenizer, caption, max_tokens=args.max_tokens
-            )
+        imgs = [_resize_for_caption(Image.open(p)) for p in chunk]
+        captions = _run_caption_inference(caption_pipe, imgs)
+        for path, caption in zip(chunk, captions):
+            token_ids = _truncate_to_token_ids(tokenizer, caption)
             rows.append(
                 {
                     "image": path,
@@ -176,14 +204,14 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument(
         "--model-id",
         type=str,
-        default="Salesforce/blip-image-captioning-base",
-        help="HF model id or local path",
+        default=CAPTION_MODEL_ID,
+        help=f"Ignored. Fixed by protocol to {CAPTION_MODEL_ID}.",
     )
     p.add_argument(
         "--tokenizer-id",
         type=str,
         default="",
-        help="Optional tokenizer id/path; defaults to model-id",
+        help="Ignored. Tokenizer is fixed to model-id by protocol.",
     )
     p.add_argument(
         "--device",
@@ -192,8 +220,18 @@ def build_argparser() -> argparse.ArgumentParser:
         choices=["auto", "cpu", "cuda"],
     )
     p.add_argument("--batch-size", type=int, default=4)
-    p.add_argument("--max-new-tokens", type=int, default=32)
-    p.add_argument("--max-tokens", type=int, default=16)
+    p.add_argument(
+        "--max-new-tokens",
+        type=int,
+        default=CAPTION_MAX_NEW_TOKENS,
+        help=f"Ignored. Fixed by protocol to {CAPTION_MAX_NEW_TOKENS}.",
+    )
+    p.add_argument(
+        "--max-tokens",
+        type=int,
+        default=CAPTION_MAX_TOKENS,
+        help=f"Ignored. Fixed by protocol to {CAPTION_MAX_TOKENS}.",
+    )
     p.add_argument("--local-files-only", action="store_true")
 
     p.add_argument("--image-key", type=str, default="s2_lr")
@@ -216,8 +254,6 @@ def main() -> None:
         raise ValueError("either --manifest or --images-glob must be provided")
 
     caption_pipe, tokenizer = _load_caption_model(
-        model_id=args.model_id,
-        tokenizer_id=args.tokenizer_id if args.tokenizer_id else None,
         local_files_only=args.local_files_only,
         device=args.device,
     )

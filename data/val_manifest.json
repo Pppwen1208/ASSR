@@ -1,0 +1,17 @@
+[
+  {
+    "id": "sample_0001",
+    "s2_hr": "data/s2/sample_0001.png",
+    "s1_hr": "data/s1/sample_0001.png",
+    "cloud_mask": "data/masks/sample_0001_cloud.tif",
+    "coherence_mask": "data/masks/sample_0001_coh.tif",
+    "text_tokens": [12, 88, 109, 3, 502]
+  },
+  {
+    "id": "sample_0002",
+    "s2_hr": "data/s2/sample_0002.png",
+    "s1_hr": "data/s1/sample_0002.png",
+    "valid_mask": "data/masks/sample_0002_valid.tif",
+    "text_embed_path": "data/text/sample_0002.npy"
+  }
+]

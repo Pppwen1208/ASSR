@@ -1,0 +1,33 @@
+{
+  "split_version": "paper-aligned-v1",
+  "paper_source": "D:/Users/DYX/Downloads/Article_Title__1_ (15).pdf",
+  "scope": "Only records split rules explicitly stated in the paper.",
+  "evidence_pages": {
+    "sen12ms_scene_level_split": 13,
+    "same_split_protocol_for_baselines": 14,
+    "bigearthnet_mm_train_vs_held_out": 20
+  },
+  "sen12ms_primary_benchmark": {
+    "dataset": "SEN12MS",
+    "split_unit": "scene-level",
+    "split_goal": "avoid spatial leakage while preserving original georeferencing",
+    "train_scene_ids": [],
+    "val_scene_ids": [],
+    "test_scene_ids": [],
+    "id_status": "Paper text does not provide explicit scene-id lists or ratio; fill from released protocol assets if available."
+  },
+  "bigearthnet_mm_zero_shot_transfer": {
+    "dataset": "BigEarthNet-MM",
+    "usage": "paired Sentinel-1/Sentinel-2 zero-shot transfer set",
+    "sr_training_rule": "SR models are trained on SEN12MS and directly applied without retraining on BigEarthNet-MM."
+  },
+  "bigearthnet_mm_downstream_classifier_protocol": {
+    "classifier_training_split": "BigEarthNet-MM training split",
+    "classifier_evaluation_split": "BigEarthNet-MM held-out evaluation split"
+  },
+  "linked_manifests": {
+    "train_manifest_path": "data/train_manifest.json",
+    "val_manifest_path": "data/val_manifest.json",
+    "test_manifest_path": "data/test_manifest.json"
+  }
+}

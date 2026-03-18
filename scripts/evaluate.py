@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -16,6 +17,15 @@ from assr.data.dataset import ASSRDataset, assr_collate
 from assr.engine.evaluator import evaluate_model, evaluate_scale_stability
 from assr.models.assr import ASSR
 
+DEFAULT_SCALES = "1.5,2,3,4,5.5,6"
+
+
+def _parse_scales(raw: str) -> list[float]:
+    scales = [float(x.strip()) for x in raw.split(",") if x.strip()]
+    if len(scales) == 0:
+        raise ValueError("scales must contain at least one float value")
+    return scales
+
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -25,8 +35,22 @@ def main() -> None:
     parser.add_argument(
         "--scales",
         type=str,
+        default=DEFAULT_SCALES,
+        help=(
+            "Scale sweep for SAS/SCE, e.g. 1.5,2,3,4,5.5,6. "
+            "Default computes SCE by default."
+        ),
+    )
+    parser.add_argument(
+        "--skip-scale-metrics",
+        action="store_true",
+        help="Skip SAS/SCE computation and only report PSNR/SSIM/LPIPS/Edge-F1.",
+    )
+    parser.add_argument(
+        "--save-json",
+        type=str,
         default="",
-        help="Optional scale sweep for SAS/SCE, e.g. 1.5,2,3,4,5.5,6",
+        help="Optional path to save metrics as JSON.",
     )
     args = parser.parse_args()
 
@@ -70,10 +94,8 @@ def main() -> None:
         max_batches=args.max_batches if args.max_batches > 0 else None,
     )
 
-    scales = []
-    if args.scales.strip():
-        scales = [float(x.strip()) for x in args.scales.split(",") if x.strip()]
-    if len(scales) > 0:
+    if not args.skip_scale_metrics:
+        scales = _parse_scales(args.scales)
         sas_sce = evaluate_scale_stability(
             model=model,
             loader=loader,
@@ -84,8 +106,43 @@ def main() -> None:
         )
         metrics.update(sas_sce)
 
-    for k, v in metrics.items():
+    # Public-facing alias for checklist wording.
+    if "sce_l1" in metrics:
+        metrics["sce"] = float(metrics["sce_l1"])
+
+    order = [
+        "psnr",
+        "ssim",
+        "lpips",
+        "edge_f1",
+        "sce",
+        "sce_l1",
+        "sce_lpips",
+        "sas_ssim",
+        "sas_edge_f1",
+    ]
+    printed: set[str] = set()
+    for k in order:
+        if k not in metrics:
+            continue
+        printed.add(k)
+        v = float(metrics[k])
         print(f"{k}: {v:.6f}")
+
+    for k in sorted(metrics.keys()):
+        if k in printed:
+            continue
+        v = float(metrics[k])
+        print(f"{k}: {v:.6f}")
+
+    if args.save_json.strip():
+        out_path = Path(args.save_json)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(
+            json.dumps({k: float(v) for k, v in metrics.items()}, indent=2),
+            encoding="utf-8",
+        )
+        print(f"saved_json: {out_path}")
 
 
 if __name__ == "__main__":
